@@ -1,0 +1,42 @@
+name: Build SiteWatch iPhone IPA
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-ipa.yml'
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install project generator
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Test and build unsigned device IPA
+        run: bash ios/build-ipa.sh
+      - name: Verify simulator launch
+        run: bash ios/verify-simulator.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SiteWatch-iPhone-unsigned
+          path: ios/build/SiteWatch-unsigned.ipa
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SiteWatch-iPhone-preview
+          path: ios/build/preview.png
+          if-no-files-found: error
+      - name: Publish downloadable IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.sha }}
+          RELEASE_TAG: ios-build-${{ github.run_number }}-${{ github.run_attempt }}
+        run: |
+          gh release create "$RELEASE_TAG" ios/build/SiteWatch-unsigned.ipa \
+            --repo "$REPOSITORY" --target "$COMMIT" \
+            --title 'SiteWatch for iPhone — unsigned IPA' \
+            --notes 'iOS 17 or later. Sign and install with Sideloadly or AltStore. Includes recorded uplink chains and foreground TCP checks. Connections are entered manually; automatic SNMP/LLDP/FortiGate discovery is not included. No background monitoring. No Windows files are changed.'
